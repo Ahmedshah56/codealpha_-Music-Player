@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nova Player</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+<style>
+/* ─── CSS Variables & Reset ─── */
+:root {
+  --bg-deep:      #0a0a0f;
+  --bg-card:      rgba(18,18,28,0.7);
+  --accent:       #e94560;
+  --accent-glow:  rgba(233,69,96,0.45);
+  --accent2:      #0f3460;
+  --text-primary: #eee;
+  --text-muted:   #7a7a8e;
+  --glass:        rgba(255,255,255,0.04);
+  --glass-border: rgba(255,255,255,0.08);
+  --radius:       18px;
+  --shadow:       0 8px 40px rgba(0,0,0,0.5);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  min-height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Share Tech Mono', monospace;
+  overflow-x: hidden;
+}
+
+/* ─── Animated Background ─── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 80%, rgba(233,69,96,0.12) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(15,52,96,0.25) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(233,69,96,0.06) 0%, transparent 70%);
+  animation: bgShift 12s ease-in-out infinite alternate;
+}
+@keyframes bgShift {
+  0%  { transform: scale(1) rotate(0deg); }
+  100%{ transform: scale(1.15) rotate(3deg); }
+}
+
+/* ─── Layout ─── */
+.container {
+  position: relative; z-index: 1;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+/* ─── Header ─── */
+.header { text-align: center; }
+.header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--accent), #f5a0b1, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header p {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* ─── Glass Card ─── */
+.glass-card {
+  width: 100%;
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 32px 28px;
+}
+
+/* ─── Now Playing Section ─── */
+.now-playing { text-align: center; }
+
+/* Vinyl / Album Art */
+.vinyl-wrap {
+  width: 180px; height: 180px;
+  margin: 0 auto 24px;
+  position: relative;
+}
+.vinyl {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #1a1a2e 0deg, #16213e 60deg, #0f3460 120deg,
+    #e94560 180deg, #1a1a2e 240deg, #16213e 300deg, #0f3460 360deg
+  );
+  box-shadow: 0 0 30px var(--accent-glow), inset 0 0 20px rgba(0,0,0,0.5);
+  transition: transform 0.4s ease;
+  animation: spin 3s linear infinite paused;
+}
+.vinyl.playing { animation-play-state: running; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.vinyl::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 44px; height: 44px;
+  transform: translate(-50%,-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, #0a0a0f 40%, #1a1a2e 100%);
+  border: 2px solid rgba(255,255,255,0.1);
+}
+/* Pulse ring */
+.vinyl-wrap::after {
+  content: '';
+  position: absolute; inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  animation: pulseRing 2s ease-out infinite;
+}
+@keyframes pulseRing {
+  0%   { transform: scale(0.95); opacity: 0.6; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
+
+/* Song Info */
+.song-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+  margin: 0 auto;
+}
+.song-artist {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+/* ─── Visualizer Bars ─── */
+.visualizer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 38px;
+  margin: 20px auto 0;
+  max-width: 220px;
+}
+.bar {
+  width: 5px;
+  border-radius: 3px;
+  background: linear-gradient(to top, var(--accent), #f5a0b1);
+  animation: barBounce 1s ease-in-out infinite alternate;
+  transform-origin: bottom;
+}
+.bar:nth-child(1){ height:30%; animation-delay:0s; }
+.bar:nth-child(2){ height:60%; animation-delay:0.1s; }
+.bar:nth-child(3){ height:90%; animation-delay:0.2s; }
+.bar:nth-child(4){ height:45%; animation-delay:0.15s; }
+.bar:nth-child(5){ height:75%; animation-delay:0.05s; }
+.bar:nth-child(6){ height:55%; animation-delay:0.25s; }
+.bar:nth-child(7){ height:85%; animation-delay:0.1s; }
+.bar:nth-child(8){ height:40%; animation-delay:0.2s; }
+.bar:nth-child(9){ height:70%; animation-delay:0.3s; }
+.bar:nth-child(10){ height:50%; animation-delay:0.05s; }
+.bar:nth-child(11){ height:80%; animation-delay:0.15s; }
+.bar:nth-child(12){ height:35%; animation-delay:0.22s; }
+@keyframes barBounce {
+  0%   { transform: scaleY(0.3); }
+  100% { transform: scaleY(1); }
+}
+.visualizer.paused .bar { animation-play-state: paused; opacity: 0.3; }
+
+/* ─── Progress Bar ─── */
+.progress-wrap {
+  margin: 24px 0 8px;
+  position: relative;
+}
+.time-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  overflow: visible;
+  transition: height 0.2s;
+}
+.progress-track:hover { height: 6px; }
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), #f5a0b1);
+  border-radius: 2px;
+  position: relative;
+  transition: width 0.15s linear;
+}
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  right: -5px; top: 50%;
+  width: 10px; height: 10px;
+  background: #fff;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  box-shadow: 0 0 8px var(--accent-glow);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.progress-track:hover .progress-fill::after { opacity: 1; }
+
+/* ─── Controls ─── */
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 20px 0 8px;
+}
+.ctrl-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.25s, background 0.25s, transform 0.15s;
+}
+.ctrl-btn:hover { color: #fff; background: var(--glass); }
+.ctrl-btn:active { transform: scale(0.9); }
+.ctrl-btn.play-btn {
+  width: 56px; height: 56px;
+  background: linear-gradient(135deg, var(--accent), #c73652);
+  color: #fff;
+  font-size: 1.4rem;
+  box-shadow: 0 4px 20px var(--accent-glow);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.ctrl-btn.play-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 30px var(--accent-glow);
+}
+.ctrl-btn.active { color: var(--accent); }
+
+/* ─── Volume ─── */
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  justify-content: center;
+}
+.volume-icon { color: var(--text-muted); font-size: 0.95rem; width: 20px; text-align:center; }
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.12);
+  outline: none;
+  cursor: pointer;
+}
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  cursor: pointer;
+}
+.volume-slider::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+/* ─── Playlist ─── */
+.playlist-section { width: 100%; }
+.playlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.playlist-header h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.autoplay-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  user-select: none;
+}
+.autoplay-label { font-size: 0.68rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+.toggle-track {
+  width: 34px; height: 18px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 9px;
+  position: relative;
+  transition: background 0.3s;
+}
+.toggle-track.on { background: var(--accent); }
+.toggle-thumb {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 2px; left: 2px;
+  transition: left 0.3s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.toggle-track.on .toggle-thumb { left: 18px; }
+
+.playlist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.playlist::-webkit-scrollbar { width: 4px; }
+.playlist::-webkit-scrollbar-track { background: transparent; }
+.playlist::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.25s;
+  position: relative;
+}
+.playlist-item:hover { background: rgba(255,255,255,0.05); }
+.playlist-item.active { background: rgba(233,69,96,0.12); border: 1px solid rgba(233,69,96,0.25); }
+.playlist-item:not(.active) { border: 1px solid transparent; }
+.track-num {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  width: 18px;
+  text-align: right;
+}
+.playlist-item.active .track-num { color: var(--accent); }
+.track-info { flex: 1; min-width: 0; }
+.track-name {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playlist-item.active .track-name { color: var(--accent); font-weight: bold; }
+.track-artist-sm { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; letter-spacing: 0.5px; }
+.track-dur { font-size: 0.7rem; color: var(--text-muted); }
+
+/* ─── Footer ─── */
+.footer {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin-top: 8px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <h1>Nova</h1>
+    <p>Music Player</p>
+  </div>
+
+  <!-- Now Playing Card -->
+  <div class="glass-card now-playing">
+    <div class="vinyl-wrap">
+      <div class="vinyl" id="vinyl"></div>
+    </div>
+    <div class="song-title" id="songTitle">Loading…</div>
+    <div class="song-artist" id="songArtist">—</div>
+
+    <!-- Visualizer -->
+    <div class="visualizer paused" id="visualizer">
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-wrap">
+      <div class="time-row">
+        <span id="currentTime">0:00</span>
+        <span id="totalTime">0:00</span>
+      </div>
+      <div class="progress-track" id="progressTrack">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="ctrl-btn" id="shuffleBtn" title="Shuffle">⇄</button>
+      <button class="ctrl-btn" id="prevBtn" title="Previous">⏮</button>
+      <button class="ctrl-btn play-btn" id="playBtn" title="Play">▶</button>
+      <button class="ctrl-btn" id="nextBtn" title="Next">⏭</button>
+      <button class="ctrl-btn" id="repeatBtn" title="Repeat">↻</button>
+    </div>
+
+    <!-- Volume -->
+    <div class="volume-row">
+      <span class="volume-icon" id="volIcon">🔊</span>
+      <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" value="0.7" />
+    </div>
+  </div>
+
+  <!-- Playlist Card -->
+  <div class="glass-card playlist-section">
+    <div class="playlist-header">
+      <h3>Playlist</h3>
+      <div class="autoplay-toggle" id="autoplayToggle">
+        <span class="autoplay-label">Autoplay</span>
+        <div class="toggle-track on" id="toggleTrack">
+          <div class="toggle-thumb"></div>
+        </div>
+      </div>
+    </div>
+    <div class="playlist" id="playlist"></div>
+  </div>
+
+  <div class="footer">Nova Player · Design adn developed by Ahmed Shah</div>
+</div>
+
+<script>
+
+const PLAYLIST = [
+  { title:"Midnight Drive",   artist:"Aurora Lane",    duration:30, bass:55,  lead:220, pad:165, lfo:0.8,  waveform:"sawtooth" },
+  { title:"Neon Shadows",     artist:"The Glitch",     duration:30, bass:65,  lead:330, pad:220, lfo:1.2,  waveform:"square"   },
+  { title:"Electric Dreamer", artist:"Synthwave Echo", duration:30, bass:44,  lead:440, pad:330, lfo:0.5,  waveform:"sawtooth" },
+  { title:"City Lights",      artist:"Aurora Lane",    duration:30, bass:82,  lead:262, pad:196, lfo:1.0,  waveform:"sine"      },
+  { title:"Velvet Night",     artist:"Lunar Drift",    duration:30, bass:49,  lead:196, pad:147, lfo:0.6,  waveform:"triangle"  },
+  { title:"Starfall",         artist:"The Glitch",     duration:30, bass:73,  lead:392, pad:294, lfo:1.5,  waveform:"square"    },
+  { title:"Phantom Waves",    artist:"Synthwave Echo", duration:30, bass:58,  lead:294, pad:247, lfo:0.9,  waveform:"sawtooth"  },
+  { title:"Golden Hour",      artist:"Lunar Drift",    duration:30, bass:62,  lead:349, pad:262, lfo:0.7,  waveform:"sine"      },
+];
+
+// ════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════
+let state = {
+  current:   0,
+  playing:   false,
+  autoplay:  true,
+  shuffle:   false,
+  repeat:    false,
+  volume:    0.7,
+  elapsed:   0,
+  intervalId: null,
+  startedAt: 0,        // AudioContext time when play began
+  pausedAt:  0,        // seconds of audio consumed before pause
+};
+
+// ════════════════════════════════════════════════════════════════
+//  WEB AUDIO ENGINE
+// ════════════════════════════════════════════════════════════════
+let audioCtx = null;
+let masterGain = null;       // master volume node
+let activeNodes = [];        // every node we create so we can stop them
+
+function ensureAudioCtx() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = state.volume;
+    masterGain.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+/* Kill every oscillator / buffer currently running */
+function stopAllNodes() {
+  activeNodes.forEach(n => { try { n.stop(); } catch(e){} });
+  activeNodes = [];
+}
+
+/*
+ * Synthesise a full "track" into the AudioContext starting at
+ * audioCtx.currentTime + startDelay, lasting for `dur` seconds.
+ * Uses the track's unique parameters to layer:
+ *   1. Bass pulse   – low sine with slow LFO tremolo
+ *   2. Lead line    – chosen waveform with arpeggio (notes cycle every 2 s)
+ *   3. Pad chords   – two detuned saws with long attack
+ *   4. Hi-hat noise – filtered noise bursts on every beat
+ *   5. Reverb tail  – simple convolution-free delay feedback loop
+ */
+function synthesiseTrack(track, startDelay, dur) {
+  const t0 = audioCtx.currentTime + startDelay;
+
+  // ── 1. Bass ──────────────────────────────────────────────────
+  const bassOsc  = audioCtx.createOscillator();
+  const bassGain = audioCtx.createGain();
+  const bassLfo  = audioCtx.createOscillator();
+  const bassLfoGain = audioCtx.createGain();
+
+  bassOsc.type      = 'sine';
+  bassOsc.frequency.value = track.bass;
+  bassGain.gain.value     = 0.28;
+  bassLfo.frequency.value = track.lfo;
+  bassLfoGain.gain.value  = 0.12;
+
+  bassLfo.connect(bassLfoGain);
+  bassLfoGain.connect(bassGain.gain);   // LFO modulates bass volume
+  bassOsc.connect(bassGain);
+  bassGain.connect(masterGain);
+
+  bassOsc.start(t0);  bassOsc.stop(t0 + dur);
+  bassLfo.start(t0);  bassLfo.stop(t0 + dur);
+  activeNodes.push(bassOsc, bassLfo);
+
+  // ── 2. Lead (arpeggio) ───────────────────────────────────────
+  // Play 5 notes cycling every 2 seconds with short attack/release
+  const notes = [track.lead, track.lead*1.122, track.lead*1.26, track.lead*1.5, track.lead*1.335];
+  const noteLen = 1.4;   // note duration
+  const noteGap = 2.0;   // repeat interval
+
+  for (let i = 0; i < Math.ceil(dur / noteGap); i++) {
+    const nStart = t0 + i * noteGap;
+    if (nStart >= t0 + dur) break;
+
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = track.waveform;
+    osc.frequency.value = notes[i % notes.length];
+
+    // sharp attack, gentle decay
+    gain.gain.setValueAtTime(0, nStart);
+    gain.gain.linearRampToValueAtTime(0.22, nStart + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, nStart + noteLen);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start(nStart);
+    osc.stop(nStart + noteLen);
+    activeNodes.push(osc);
+  }
+
+  // ── 3. Pad (two detuned saws) ────────────────────────────────
+  [-8, 8].forEach(detune => {
+    const pad  = audioCtx.createOscillator();
+    const pGain= audioCtx.createGain();
+    const pFilter = audioCtx.createBiquadFilter();
+
+    pad.type            = 'sawtooth';
+    pad.frequency.value = track.pad;
+    pad.detune.value    = detune;
+
+    pFilter.type           = 'lowpass';
+    pFilter.frequency.value= 800;
+    pFilter.Q.value        = 1.2;
+
+    // Slow fade-in
+    pGain.gain.setValueAtTime(0, t0);
+    pGain.gain.linearRampToValueAtTime(0.1, t0 + 2);
+    // Slow fade-out at end
+    pGain.gain.setValueAtTime(0.1, t0 + dur - 1.5);
+    pGain.gain.linearRampToValueAtTime(0, t0 + dur);
+
+    pad.connect(pFilter);
+    pFilter.connect(pGain);
+    pGain.connect(masterGain);
+    pad.start(t0);
+    pad.stop(t0 + dur);
+    activeNodes.push(pad);
+  });
+
+  // ── 4. Hi-hat noise ──────────────────────────────────────────
+  const bpm      = 110;
+  const beatLen  = 60 / bpm;
+  const totalBeats = Math.floor(dur / beatLen);
+
+  for (let i = 0; i < totalBeats; i++) {
+    const hitTime = t0 + i * beatLen;
+    if (hitTime >= t0 + dur) break;
+
+    // Create a short noise buffer
+    const bufLen  = audioCtx.sampleRate * 0.08;  // 80 ms
+    const buffer  = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+    const data    = buffer.getChannelData(0);
+    for (let s = 0; s < bufLen; s++) data[s] = (Math.random() * 2 - 1);
+
+    const src     = audioCtx.createBufferSource();
+    const hGain   = audioCtx.createGain();
+    const hFilter = audioCtx.createBiquadFilter();
+
+    src.buffer       = buffer;
+    hFilter.type     = 'highpass';
+    hFilter.frequency.value = 6000;
+    hGain.gain.value = (i % 4 === 0) ? 0.08 : 0.035; // accented on beat 1
+
+    src.connect(hFilter);
+    hFilter.connect(hGain);
+    hGain.connect(masterGain);
+    src.start(hitTime);
+    activeNodes.push(src);
+  }
+
+  // ── 5. Delay echo (feedback loop) ────────────────────────────
+  const delayNode  = audioCtx.createDelay(1.0);
+  const delayGain  = audioCtx.createGain();
+  const delayOsc   = audioCtx.createOscillator();
+  const delayOscGn = audioCtx.createGain();
+
+  delayNode.delayTime.value = 0.45;
+  delayGain.gain.value      = 0.3;   // feedback amount
+  delayOsc.type             = track.waveform;
+  delayOsc.frequency.value  = track.lead * 0.75;
+  delayOscGn.gain.value     = 0.07;
+
+  delayOsc.connect(delayOscGn);
+  delayOscGn.connect(delayNode);
+  delayNode.connect(delayGain);
+  delayGain.connect(delayNode);   // feedback loop
+  delayGain.connect(masterGain);
+
+  delayOsc.start(t0);
+  delayOsc.stop(t0 + dur);
+  activeNodes.push(delayOsc);
+}
+
+/* Start audio from a given elapsed-second offset */
+function startAudio(fromSec) {
+  stopAllNodes();
+  ensureAudioCtx();
+  const track     = PLAYLIST[state.current];
+  const remaining = track.duration - fromSec;
+  if (remaining <= 0) return;
+
+  // We synthesise the full track but schedule it so that the
+  // "now" point corresponds to fromSec into the track.
+  // Since Web Audio can't truly seek procedural audio, we re-synth
+  // starting at -fromSec (in the past) — nodes that already finished
+  // just won't produce sound. For short synth tracks this is fine.
+  synthesiseTrack(track, -fromSec, track.duration);
+
+  state.startedAt = audioCtx.currentTime - fromSec;
+}
+
+/* ─── DOM refs ─── */
+const $ = id => document.getElementById(id);
+const vinyl       = $('vinyl');
+const songTitle   = $('songTitle');
+const songArtist  = $('songArtist');
+const visualizer  = $('visualizer');
+const progressFill= $('progressFill');
+const currentTime = $('currentTime');
+const totalTime   = $('totalTime');
+const playBtn     = $('playBtn');
+const prevBtn     = $('prevBtn');
+const nextBtn     = $('nextBtn');
+const shuffleBtn  = $('shuffleBtn');
+const repeatBtn   = $('repeatBtn');
+const volSlider   = $('volumeSlider');
+const volIcon     = $('volIcon');
+const toggleTrack = $('toggleTrack');
+const playlistEl  = $('playlist');
+
+// ════════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════════
+function fmtTime(s) {
+  s = Math.floor(s);
+  const m   = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+}
+
+function getElapsed() {
+  if (!state.playing) return state.pausedAt;
+  return audioCtx ? (audioCtx.currentTime - state.startedAt) : state.pausedAt;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  UI RENDER
+// ════════════════════════════════════════════════════════════════
+function renderPlaylist() {
+  playlistEl.innerHTML = '';
+  PLAYLIST.forEach((track, i) => {
+    const item = document.createElement('div');
+    item.className = 'playlist-item' + (i === state.current ? ' active' : '');
+    item.innerHTML = `
+      <span class="track-num">${i+1}</span>
+      <div class="track-info">
+        <div class="track-name">${track.title}</div>
+        <div class="track-artist-sm">${track.artist}</div>
+      </div>
+      <span class="track-dur">${fmtTime(track.duration)}</span>`;
+    item.addEventListener('click', () => {
+      stopAllNodes();
+      state.current = i;
+      state.pausedAt = 0;
+      loadTrack();
+      if (state.playing) { startAudio(0); }
+    });
+    playlistEl.appendChild(item);
+  });
+}
+
+function loadTrack() {
+  const track         = PLAYLIST[state.current];
+  songTitle.textContent  = track.title;
+  songArtist.textContent = track.artist;
+  totalTime.textContent  = fmtTime(track.duration);
+  currentTime.textContent= '0:00';
+  progressFill.style.width = '0%';
+  renderPlaylist();
+}
+
+function updatePlayUI() {
+  playBtn.textContent = state.playing ? '⏸' : '▶';
+  vinyl.classList.toggle('playing', state.playing);
+  visualizer.classList.toggle('paused', !state.playing);
+}
+
+function updateProgress() {
+  const track   = PLAYLIST[state.current];
+  const elapsed = getElapsed();
+  const pct     = Math.min(100, (elapsed / track.duration) * 100);
+  progressFill.style.width = pct + '%';
+  currentTime.textContent  = fmtTime(elapsed);
+}
+
+function updateVolIcon() {
+  const v = state.volume;
+  volIcon.textContent = v === 0 ? '🔇' : v < 0.4 ? '🔉' : '🔊';
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PLAY / PAUSE
+// ════════════════════════════════════════════════════════════════
+function play() {
+  ensureAudioCtx();
+  state.playing = true;
+  startAudio(state.pausedAt);
+  updatePlayUI();
+
+  // Tick every 200 ms to update progress & detect track end
+  if (state.intervalId) clearInterval(state.intervalId);
+  state.intervalId = setInterval(() => {
+    const elapsed = getElapsed();
+    updateProgress();
+    if (elapsed >= PLAYLIST[state.current].duration) {
+      onTrackEnd();
+    }
+  }, 200);
+}
+
+function pause() {
+  state.pausedAt = getElapsed();
+  stopAllNodes();
+  state.playing  = false;
+  updatePlayUI();
+  if (state.intervalId) { clearInterval(state.intervalId); state.intervalId = null; }
+}
+
+function onTrackEnd() {
+  pause();
+  state.pausedAt = 0;
+  if (state.repeat) {
+    loadTrack();
+    play();
+  } else if (state.autoplay) {
+    goNext();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════════════
+function goNext() {
+  const wasPlaying = state.playing;
+  if (state.playing) pause();
+  if (state.shuffle) {
+    let next;
+    do { next = Math.floor(Math.random() * PLAYLIST.length); } while (next === state.current && PLAYLIST.length > 1);
+    state.current = next;
+  } else {
+    state.current = (state.current + 1) % PLAYLIST.length;
+  }
+  state.pausedAt = 0;
+  loadTrack();
+  if (wasPlaying || state.autoplay) play();
+}
+
+function goPrev() {
+  const wasPlaying = state.playing;
+  if (state.playing) pause();
+  if (state.pausedAt > 3) {
+    state.pausedAt = 0;
+    loadTrack();
+  } else {
+    state.current  = (state.current - 1 + PLAYLIST.length) % PLAYLIST.length;
+    state.pausedAt = 0;
+    loadTrack();
+  }
+  if (wasPlaying) play();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  EVENT LISTENERS
+// ════════════════════════════════════════════════════════════════
+playBtn.addEventListener('click', () => {
+  // Browsers require a user gesture to start AudioContext
+  ensureAudioCtx();
+  state.playing ? pause() : play();
+});
+nextBtn.addEventListener('click', goNext);
+prevBtn.addEventListener('click', goPrev);
+
+shuffleBtn.addEventListener('click', () => {
+  state.shuffle = !state.shuffle;
+  shuffleBtn.classList.toggle('active', state.shuffle);
+});
+repeatBtn.addEventListener('click', () => {
+  state.repeat = !state.repeat;
+  repeatBtn.classList.toggle('active', state.repeat);
+});
+
+volSlider.addEventListener('input', () => {
+  state.volume = parseFloat(volSlider.value);
+  if (masterGain) masterGain.gain.value = state.volume;
+  updateVolIcon();
+});
+
+$('autoplayToggle').addEventListener('click', () => {
+  state.autoplay = !state.autoplay;
+  toggleTrack.classList.toggle('on', state.autoplay);
+});
+
+// ── Progress bar seek (mouse + touch) ────────────────────────
+let dragging = false;
+function seekFrom(e) {
+  const rect  = $('progressTrack').getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const seekTo = ratio * PLAYLIST[state.current].duration;
+  state.pausedAt = seekTo;
+  if (state.playing) startAudio(seekTo);   // re-synth from new position
+  updateProgress();
+}
+$('progressTrack').addEventListener('mousedown',  e => { dragging = true; seekFrom(e); });
+document.addEventListener('mousemove',  e => { if (dragging) seekFrom(e); });
+document.addEventListener('mouseup',    () => { dragging = false; });
+$('progressTrack').addEventListener('touchstart', e => { dragging = true; seekFrom(e.touches[0]); }, {passive:true});
+document.addEventListener('touchmove',  e => { if (dragging) seekFrom(e.touches[0]); }, {passive:true});
+document.addEventListener('touchend',   () => { dragging = false; });
+
+// ════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════
+volSlider.value = state.volume;
+updateVolIcon();
+loadTrack();
+</script>
+</body>
+</html>
